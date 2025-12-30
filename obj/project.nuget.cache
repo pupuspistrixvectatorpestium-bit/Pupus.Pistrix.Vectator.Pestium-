@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "dgSpecHash": "yLhViPl3MKA=",
+  "success": true,
+  "projectFilePath": "C:\\Users\\marca\\source\\repos\\PupusPistrixVectatorPestium\\SharkyZergExampleBot\\SharkyZergExampleBot.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\marca\\.nuget\\packages\\google.protobuf\\3.23.2\\google.protobuf.3.23.2.nupkg.sha512",
+    "C:\\Users\\marca\\.nuget\\packages\\microsoft.csharp\\4.7.0\\microsoft.csharp.4.7.0.nupkg.sha512",
+    "C:\\Users\\marca\\.nuget\\packages\\newtonsoft.json\\13.0.3\\newtonsoft.json.13.0.3.nupkg.sha512",
+    "C:\\Users\\marca\\.nuget\\packages\\royt.astar\\3.0.2\\royt.astar.3.0.2.nupkg.sha512"
+  ],
+  "logs": []
+}

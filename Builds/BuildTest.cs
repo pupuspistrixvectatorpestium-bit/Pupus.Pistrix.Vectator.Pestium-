@@ -16,6 +16,9 @@ namespace Sharky.Builds.Zerg
         private readonly DefaultSharkyBot _defaultSharkyBot;
         private bool _step5Called;
 
+        // remember the Step5 target so we can issue the build later
+        private Point2D _step5Target;
+
         // Stop guard for >275 minerals
         private bool _stopTriggered;
 
@@ -29,6 +32,7 @@ namespace Sharky.Builds.Zerg
             _step5Called = false;
 
             _stopTriggered = false;
+            _step5Target = null;
         }
 
         public override void StartBuild(int frame)
@@ -41,7 +45,7 @@ namespace Sharky.Builds.Zerg
 
             MacroData.DesiredGases = 0;
             MacroData.DesiredProductionCounts[UnitTypes.ZERG_HATCHERY] = 1;
-            MacroData.DesiredUnitCounts[UnitTypes.ZERG_DRONE] = 22;
+            MacroData.DesiredUnitCounts[UnitTypes.ZERG_DRONE] = 15;
             MacroData.DesiredUnitCounts[UnitTypes.ZERG_QUEEN] = 1;
             MacroData.DesiredUnitCounts[UnitTypes.ZERG_OVERLORD ] = 1;
 
@@ -54,13 +58,26 @@ namespace Sharky.Builds.Zerg
         {
             base.OnFrame(observation);
 
-            // Early stop: break once when minerals exceed 275 and prevent further Step5 calls
+            // Early stop: when minerals exceed 275, trigger the build at the stored Step5 location (once)
             if (!_stopTriggered && MacroData != null && MacroData.Minerals > 275)
             {
                 _stopTriggered = true;
-                System.Console.WriteLine($"BuildTest: Stopping at minerals={MacroData.Minerals} (>275)");
-                System.Diagnostics.Debugger.Break();
-                // return to avoid any build actions this frame
+
+                if (_step5Target != null)
+                {
+                    try
+                    {
+                        // Always use the Maw helper directly (do not delegate to PrePositionBuilderTask)
+                        Maw.MicroControllers.MineralWalkerMaw.PrepositionAt(_defaultSharkyBot, _step5Target, MacroData.Frame);
+                        System.Console.WriteLine($"BuildTest: PrepositionAt called for {_step5Target.X}, {_step5Target.Y}");
+                    }
+                    catch (System.Exception ex)
+                    {
+                        System.Console.WriteLine($"BuildTest: error requesting build at step5 target: {ex.Message}");
+                    }
+                }
+
+                // stop further Step5 activity
                 return;
             }
 
@@ -72,6 +89,7 @@ namespace Sharky.Builds.Zerg
                     try
                     {
                         var target = Step5.CalculateTopOfRamp(_defaultSharkyBot, BaseData, ActiveUnitData);
+                        _step5Target = target; // store for later build at 275
                         System.Console.WriteLine($"BuildTest: Step5 target X={target.X}, Y={target.Y}");
                         // Delegate to Maw helper to perform prepositioning; Step5 no longer issues orders
                         Maw.MicroControllers.MineralWalkerMaw.PrepositionAt(_defaultSharkyBot, target, MacroData.Frame);

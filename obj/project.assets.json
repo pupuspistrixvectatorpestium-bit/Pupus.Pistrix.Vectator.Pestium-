@@ -226,6 +226,7 @@
   },
   "projectFileDependencyGroups": {
     "net9.0": [
+      "S2ClientProtocol >= 1.0.0",
       "SharkySC2 >= 1.1.0"
     ]
   },
@@ -237,11 +238,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Users\\marca\\source\\repos\\PupusPistrixVectatorPestium\\SharkyZergExampleBot\\SharkyZergExampleBot.csproj",
-      "projectName": "SharkyZergExampleBot",
-      "projectPath": "C:\\Users\\marca\\source\\repos\\PupusPistrixVectatorPestium\\SharkyZergExampleBot\\SharkyZergExampleBot.csproj",
+      "projectUniqueName": "C:\\Users\\marca\\source\\repos\\PupusPistrixVectatorPestium\\PupusPistrixVectatorPestiumBot\\PupusPistrixVectatorPestium.csproj",
+      "projectName": "PupusPistrixVectatorPestium",
+      "projectPath": "C:\\Users\\marca\\source\\repos\\PupusPistrixVectatorPestium\\PupusPistrixVectatorPestiumBot\\PupusPistrixVectatorPestium.csproj",
       "packagesPath": "C:\\Users\\marca\\.nuget\\packages\\",
-      "outputPath": "C:\\Users\\marca\\source\\repos\\PupusPistrixVectatorPestium\\SharkyZergExampleBot\\obj\\",
+      "outputPath": "C:\\Users\\marca\\source\\repos\\PupusPistrixVectatorPestium\\PupusPistrixVectatorPestiumBot\\obj\\",
       "projectStyle": "PackageReference",
       "fallbackFolders": [
         "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages",
@@ -264,6 +265,9 @@
         "net9.0": {
           "targetAlias": "net9.0",
           "projectReferences": {
+            "C:\\Users\\marca\\source\\repos\\PupusPistrixVectatorPestium\\S2ClientProtocol\\S2ClientProtocol.csproj": {
+              "projectPath": "C:\\Users\\marca\\source\\repos\\PupusPistrixVectatorPestium\\S2ClientProtocol\\S2ClientProtocol.csproj"
+            },
             "C:\\Users\\marca\\source\\repos\\PupusPistrixVectatorPestium\\Sharky\\Sharky.csproj": {
               "projectPath": "C:\\Users\\marca\\source\\repos\\PupusPistrixVectatorPestium\\Sharky\\Sharky.csproj"
             }

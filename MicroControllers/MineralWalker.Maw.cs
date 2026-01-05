@@ -15,6 +15,9 @@ namespace Maw.MicroControllers
     /// </summary>
     public static class MineralWalkerMaw
     {
+        // Expose the last-selected UnitCommander for callers that need the worker id.
+        public static UnitCommander BestUnitCommander { get; private set; }
+
         public static UnitCommander SelectDroneForPreposition(
             BaseData baseData,
             SharkyUnitData sharkyUnitData,
@@ -25,6 +28,9 @@ namespace Maw.MicroControllers
             float hatcheryRadius = 4f,
             float workerRadius = 6f)
         {
+            // reset stored best each invocation
+            BestUnitCommander = null;
+
             if (target == null || baseData == null || sharkyUnitData == null || activeUnitData == null) return null;
 
             var drones = activeUnitData.Commanders.Values
@@ -36,17 +42,17 @@ namespace Maw.MicroControllers
             var targetV = new Vector2(target.X, target.Y);
             var selfBases = baseData.SelfBases.ToList();
 
-            UnitCommander bestIdle = null;
-            float bestIdleDist = float.MaxValue;
+            UnitCommander bestIdleWithinWalk = null;
+            float bestIdleWithinWalkDist = float.MaxValue;
 
             UnitCommander bestNew = null;
             float bestNewDist = float.MaxValue;
 
-            UnitCommander bestAtHatch = null;
-            float bestAtHatchDist = float.MaxValue;
+            UnitCommander bestAtHatchFarPatch = null;
+            float bestAtHatchFarPatchDist = float.MaxValue;
 
-            UnitCommander bestReturning = null;
-            float bestReturningDist = float.MaxValue;
+            UnitCommander bestFarReturning = null;
+            float bestFarReturningDist = float.MaxValue;
 
             foreach (var d in drones)
             {
@@ -66,23 +72,48 @@ namespace Maw.MicroControllers
                 var carryingResource = u.BuffIds != null && u.BuffIds.Any(b => sharkyUnitData.CarryingResourceBuffs.Contains((Buffs)b));
                 var hasAnyOrder = orders != null && orders.Count > 0;
 
-                // idle: no orders, not carrying, not claimed, not building
-                // Only the idle branch excludes claimed drones (per your instruction).
+                // determine whether this worker is assigned to a near mineral patch
+                var miningInfo = selfBases
+                    .SelectMany(sb => sb.MineralMiningInfo ?? Enumerable.Empty<dynamic>()) // dynamic to avoid type name differences
+                    .OrderBy(mi => Vector2.DistanceSquared(pos, new Vector2(mi.ResourceUnit.Pos.X, mi.ResourceUnit.Pos.Y)))
+                    .FirstOrDefault();
+
+                var isNearPatchMiner = false;
+                if (miningInfo != null)
+                {
+                    var resPos = new Vector2(miningInfo.ResourceUnit.Pos.X, miningInfo.ResourceUnit.Pos.Y);
+                    var resDistSqr = Vector2.DistanceSquared(resPos, pos);
+                    // near patch threshold uses workerRadius parameter
+                    isNearPatchMiner = resDistSqr <= workerRadius * workerRadius;
+                }
+
+                // 1) Newly created workers: always preferred (return immediately)
+                if (frame - d.FrameFirstSeen <= newThreshold)
+                {
+                    BestUnitCommander = d;
+                    return d;
+                }
+
+                // 2) Idle workers that can walk to the point quickly (prefer these)
                 var isIdle = !hasAnyOrder && !carryingResource && !d.Claimed && d.UnitRole != UnitRole.Build;
                 if (isIdle)
                 {
-                    // If an idle drone that fits is found, use it immediately.
-                    return d;
+                    // only consider idle if they are within reasonable walking distance to the target
+                    if (distToTarget <= workerRadius * workerRadius)
+                    {
+                        if (distToTarget < bestIdleWithinWalkDist)
+                        {
+                            bestIdleWithinWalkDist = distToTarget;
+                            bestIdleWithinWalk = d;
+                        }
+                        continue;
+                    }
+
+                    // idle but too far — skip for now (we prefer idle within walk distance)
+                    continue;
                 }
 
-                // newly created: seen very recently (frame-based)
-                if (frame - d.FrameFirstSeen <= newThreshold)
-                {
-                    // If a newly created drone fits, use it immediately.
-                    return d;
-                }
-
-                // at hatchery and already returned cargo: close to any base resource center and not carrying
+                // 3) Far patch miners at the hatchery (near base center) — prefer these next
                 var atHatch = selfBases.Any(sb =>
                 {
                     if (sb.ResourceCenter == null) return false;
@@ -91,68 +122,66 @@ namespace Maw.MicroControllers
                     return Vector2.DistanceSquared(rcPos, pos) <= hatcheryRadius * hatcheryRadius;
                 });
 
-                if (atHatch && !carryingResource)
+                // Exclude near patch miners entirely from consideration (they should keep mining)
+                if (isNearPatchMiner)
                 {
-                    // Only the best at-hatch candidate will be used (store and continue scanning other drones).
-                    if (distToTarget < bestAtHatchDist)
+                    // skip this drone (do not add to any candidate lists)
+                    continue;
+                }
+
+                if (atHatch)
+                {
+                    // far-patch worker associated with hatchery (not a near patch miner)
+                    if (distToTarget < bestAtHatchFarPatchDist)
                     {
-                        bestAtHatchDist = distToTarget;
-                        bestAtHatch = d;
+                        bestAtHatchFarPatchDist = distToTarget;
+                        bestAtHatchFarPatch = d;
                     }
                     continue;
                 }
 
-                // For any carrying/returning drones, attempt to return minerals now (don't select them for preposition).
+                // 4) Far patch returning or carrying: last-resort candidates
                 if (carryingResource || hasReturnOrder)
                 {
-                    try
+                    if (distToTarget < bestFarReturningDist)
                     {
-                        // Build the minimal data needed to call ReturnMineralsAndGoBuild for this drone.
-                        var selfBase = baseData?.SelfBases?.FirstOrDefault();
-                        Vector2 baseVector = new Vector2(0, 0);
-                        Point2D dropOffPoint = null;
-                        Point2D harvestPoint = null;
-                        ulong baseTag = 0;
-
-                        if (selfBase != null)
-                        {
-                            if (selfBase.ResourceCenter != null)
-                            {
-                                baseVector = new Vector2(selfBase.ResourceCenter.Pos.X, selfBase.ResourceCenter.Pos.Y);
-                                baseTag = selfBase.ResourceCenter.Tag;
-                            }
-
-                            var miningInfo = selfBase.MineralMiningInfo?.FirstOrDefault(mi => mi.Workers.Any(w => w.UnitCalculation?.Unit?.Tag == d.UnitCalculation.Unit.Tag))
-                                            ?? selfBase.MineralMiningInfo?.OrderBy(mi => Vector2.DistanceSquared(d.UnitCalculation.Position, new Vector2(mi.ResourceUnit.Pos.X, mi.ResourceUnit.Pos.Y))).FirstOrDefault();
-
-                            if (miningInfo != null)
-                            {
-                                dropOffPoint = miningInfo.DropOffPoint;
-                                harvestPoint = miningInfo.HarvestPoint;
-                            }
-                        }
-
-                        if (dropOffPoint == null) dropOffPoint = new Point2D { X = baseVector.X, Y = baseVector.Y };
-                        if (harvestPoint == null) harvestPoint = new Point2D { X = d.UnitCalculation.Position.X, Y = d.UnitCalculation.Position.Y };
-
-                        // Issue return actions (ignore returned actions here, other systems will filter/send them).
-                        _ = ReturnMineralsAndGoBuild(d, baseVector, dropOffPoint, harvestPoint, target, frame, baseTag);
-                    }
-                    catch
-                    {
-                        // swallow — we don't want a single drone's return attempt to break selection.
+                        bestFarReturningDist = distToTarget;
+                        bestFarReturning = d;
                     }
                 }
             }
 
-            // Selection priority:
-            // 1) bestAtHatch (only this at‑hatch drone gets used)
-            // 2) fallback: closest drone to target (claimed or not) — everything else has been instructed to return where possible
-            if (bestAtHatch != null) return bestAtHatch;
+            // Selection priority enforcement:
+            // 1) bestIdleWithinWalk
+            if (bestIdleWithinWalk != null)
+            {
+                BestUnitCommander = bestIdleWithinWalk;
+                return bestIdleWithinWalk;
+            }
 
-            return drones
+            // 2) bestNew was already returned earlier (new returns immediately)
+            // 3) bestAtHatchFarPatch
+            if (bestAtHatchFarPatch != null)
+            {
+                BestUnitCommander = bestAtHatchFarPatch;
+                return bestAtHatchFarPatch;
+            }
+
+            // 4) bestFarReturning
+            if (bestFarReturning != null)
+            {
+                BestUnitCommander = bestFarReturning;
+                return bestFarReturning;
+            }
+
+            // Fallback: nearest unclaimed drone (exclude near patch miners already skipped)
+            var fallback = drones
+                .Where(c => !c.Claimed)
                 .OrderBy(c => Vector2.DistanceSquared(c.UnitCalculation.Position, targetV))
                 .FirstOrDefault();
+
+            BestUnitCommander = fallback;
+            return fallback;
         }
 
         // Mirror MineralMiner.ReturnMinerals behavior but queue MOVE to buildLocation instead of moving back to harvest point.

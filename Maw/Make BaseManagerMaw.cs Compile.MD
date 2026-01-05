@@ -1,7 +1,7 @@
 
 
 Title:
-    Step5 Return the Worker ID from MineralWalker.Maw.cs
+    Make BaseManagerMaw.cs work like MineralWalker.Maw.cs and DefaultBabySharkBot.Maw.cs to Use with DefaultBabySharkBot and MineralWalker MicroControllers
     
     
     
@@ -11,24 +11,26 @@ Repository / Context:
 - https://github.com/pupuspistrixvectatorpestium-bit/Pupus.Pistrix.Vectator.Pestium-
 - https://github.com/sharknice/Sharky
 - Files to inspect (list exact paths) and which file is active 
-- C:\Users\marca\source\repos\PupusPistrixVectatorPestium\Sharky\MicroTasks\Macro\PrePositionBuilderTask.cs
-- C:\Users\marca\source\repos\PupusPistrixVectatorPestium\MawZergBot\MicroControllers\MineralWalker.Maw.cs
-- C:\Users\marca\source\repos\PupusPistrixVectatorPestium\MawZergBot\Builds\BuildTest.cs
-- 
+- C:\Users\marca\source\repos\PupusPistrixVectatorPestium\PupusPistrixVectatorPestiumBot\MicroControllers\DefaultBabySharkBot.Maw.cs
+- C:\Users\marca\source\repos\PupusPistrixVectatorPestium\PupusPistrixVectatorPestiumBot\MicroControllers\MineralWalker.Maw.cs
+- C:\Users\marca\source\repos\PupusPistrixVectatorPestium\PupusPistrixVectatorPestiumBot\MicroControllers\BaseManagerMaw.cs
+- C:\Users\marca\source\repos\PupusPistrixVectatorPestium\Sharky\Managers\BaseManager.cs
+
 Goal (explicit success criteria):
+- Make BaseManagerMaw work like MineralWalker.Maw and DefaultBabySharkBot.Maw to Use with DefaultBabySharkBot and MineralWalker MicroControllers
+- Step one is making it compile without errors before proceeding to new functionality
 - Do not us condisending or insulting language like "Breath" don't tell that you are taking a breath.  AI does not have lungs
 - The AI has permission to fail, ask the user for more information, and tell the user I don't know.
 - The AI Must not fabricate code or use exambles from outside the Sharky repo for anything implimented.
 - Everything that is needed to complete the task must be found in the Sharky repo.
+- Do not change Files in Sharky directory or it's subdirectories 
 - Do not impliment any other functionality
 - Do not change any other functionality
 - Do everything in small simple steps
 - Do not make any assumptions about what the user wants beyond what is explicitly stated
 - Document every step taken
-- Step 6 in BuildTest.cs at 275 mineralswill be Building the Hatchery at the location.  Simular to PrePositionBuilderTask.cs SendBuilder but with the Worker ID from MineralWalker.Maw.cs
-- i.e. PrePositionBuilderTask.SendBuilder(location, frame); will become something like MineralWalker.SendBuilder(workerId, location, frame);
 
-
+System Information:
     Language and runtime: e.g., `C# 13`, `.NET 9`, IDE: `Visual Studio 2026`.
     
     [Contents of Microsoft Visual Studio or VS Code Help About pasted here]

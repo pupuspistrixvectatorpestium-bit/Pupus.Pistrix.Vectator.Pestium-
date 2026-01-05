@@ -1,6 +1,8 @@
 using SC2APIProtocol;
 using Sharky.DefaultBot;
 using System.Linq;
+using System;
+using System.IO;
 
 namespace Sharky.Builds.Zerg
 {
@@ -22,6 +24,13 @@ namespace Sharky.Builds.Zerg
         // Stop guard for >275 minerals
         private bool _stopTriggered;
 
+        // --- logging fields for mineral sampling ---
+        // TestNumber can be set externally if you want multiple runs labeled
+        public int TestNumber { get; set; } = 3;
+        int _prevMinerals = -1;
+        string _logFile;
+        readonly object _logLock = new object();
+
         public BuildTest(DefaultSharkyBot defaultSharkyBot)
             : base(defaultSharkyBot)
         {
@@ -33,6 +42,25 @@ namespace Sharky.Builds.Zerg
 
             _stopTriggered = false;
             _step5Target = null;
+
+            // initialize logging (minimal, local CSV)
+            try
+            {
+                var folder = FilePath.Combine(Directory.GetCurrentDirectory(), "data", "mining_tests");
+                Directory.CreateDirectory(folder);
+                _logFile = FilePath.Combine(folder, $"mining_test_{TestNumber}_{DateTime.Now:yyyyMMddHHmmss}.csv");
+
+                if (!File.Exists(_logFile))
+                {
+                    // Header includes GameSeconds with millisecond precision
+                    File.WriteAllText(_logFile, "Test,TimestampUTC,GameSeconds,Minerals,Frame" + Environment.NewLine);
+                }
+            }
+            catch
+            {
+                // do not break runtime on logging failures
+                _logFile = null;
+            }
         }
 
         public override void StartBuild(int frame)
@@ -52,11 +80,34 @@ namespace Sharky.Builds.Zerg
             _extractorsRequested = false;
             _extraDronesQueued = false;
             _extractorTrickCompleted = false;
+
+            // reset prev minerals at start of the build
+            _prevMinerals = -1;
         }
 
         public override void OnFrame(ResponseObservation observation)
         {
             base.OnFrame(observation);
+
+            // record mineral changes for spreadsheet:
+            if (MacroData != null)
+            {
+                var currentMinerals = MacroData.Minerals;
+                var currentFrame = MacroData.Frame;
+
+                if (_prevMinerals == -1)
+                {
+                    // initial seed value (record the starting minerals once)
+                    _prevMinerals = currentMinerals;
+                    AppendMineralRecord(currentMinerals, currentFrame);
+                }
+                else if (currentMinerals != _prevMinerals)
+                {
+                    // minerals changed this frame -> log
+                    AppendMineralRecord(currentMinerals, currentFrame);
+                    _prevMinerals = currentMinerals;
+                }
+            }
 
             // Early stop: when minerals exceed 275, trigger the build at the stored Step5 location (once)
             if (!_stopTriggered && MacroData != null && MacroData.Minerals > 275)
@@ -70,6 +121,17 @@ namespace Sharky.Builds.Zerg
                         // Always use the Maw helper directly (do not delegate to PrePositionBuilderTask)
                         Maw.MicroControllers.MineralWalkerMaw.PrepositionAt(_defaultSharkyBot, _step5Target, MacroData.Frame);
                         System.Console.WriteLine($"BuildTest: PrepositionAt called for {_step5Target.X}, {_step5Target.Y}");
+
+                        // Log the best commander selected by Maw (if any)
+                        var best = Maw.MicroControllers.MineralWalkerMaw.BestUnitCommander;
+                        if (best != null && best.UnitCalculation?.Unit != null)
+                        {
+                            System.Console.WriteLine($"BuildTest: Maw.BestUnitCommander tag={best.UnitCalculation.Unit.Tag}");
+                        }
+                        else
+                        {
+                            System.Console.WriteLine("BuildTest: Maw.BestUnitCommander is null");
+                        }
                     }
                     catch (System.Exception ex)
                     {
@@ -106,11 +168,11 @@ namespace Sharky.Builds.Zerg
 
             var supply = MacroData.FoodUsed;
             var larvaCount = ActiveUnitData.SelfUnits.Values.Count(u => u.Unit.UnitType == (uint)UnitTypes.ZERG_LARVA);
-            var minerals = MacroData.Minerals;
+            var mineralsValue = MacroData.Minerals;
 
             // Step 1: At 14 supply, 2 larva, 250 minerals, request double extractor
             //if (!_extractorsRequested && supply >= 14 && larvaCount >= 2 && minerals >= 250)
-            if (!_extractorsRequested && supply >= 14 && larvaCount >= 1 && minerals >= 120)
+            if (!_extractorsRequested && supply >= 14 && larvaCount >= 1 && mineralsValue >= 120)
             {
                 MacroData.DesiredGases = 1; // Sharky will assign two drones to build
                 _extractorsRequested = true;
@@ -152,6 +214,39 @@ namespace Sharky.Builds.Zerg
                     MacroData.DesiredUnitCounts[UnitTypes.ZERG_OVERLORD] =
                         UnitCountService.Count(UnitTypes.ZERG_OVERLORD) + 1;
                 }
+            }
+        }
+
+        private void AppendMineralRecord(int minerals, int frame)
+        {
+            if (string.IsNullOrEmpty(_logFile)) return;
+
+            // Compute game-time seconds with millisecond precision
+            double gameSeconds = frame / 60.0; // fallback
+            try
+            {
+                if (_defaultSharkyBot?.FrameToTimeConverter != null)
+                {
+                    gameSeconds = _defaultSharkyBot.FrameToTimeConverter.GetTime(frame).TotalSeconds;
+                }
+            }
+            catch
+            {
+                // ignore and use fallback
+            }
+
+            var line = $"{TestNumber},{DateTime.UtcNow:o},{gameSeconds:F3},{minerals},{frame}{Environment.NewLine}";
+
+            try
+            {
+                lock (_logLock)
+                {
+                    File.AppendAllText(_logFile, line);
+                }
+            }
+            catch
+            {
+                // swallow logging exceptions to avoid interfering with runtime
             }
         }
 
